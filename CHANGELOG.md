@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.3 — 2026-11-16
+- 调整下简介显示为中文
+
 ## 0.6.2 — 2026-11-16
 
 - **修默认语音模型目录**：旧版按固定层数拼 `dataDir/../models/...`，但 World 的 `dataDir` 是 `<CORTICO_HOME>/companion/data`（和模型目录差两层），于是拼出 `data/home/companion/models/...` —— 重启后 `awx_status` 显示「找不到模型文件」。现在 `defaultVoiceModelDir()` 先看 `CORTICO_HOME`，再从 `dataDir` 往上试 5 级，**只有真的含 `.onnx` + `tokens.txt` 的那层才算**；模型版本号变了就取 `models/desktop-pet/` 下第一份能用的；一份都没有时返回最可能的路径，让报错指得到位置。`worlds.agentwechat.voiceModelDir` 手填仍然优先。
