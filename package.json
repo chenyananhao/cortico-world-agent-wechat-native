@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-agent-wechat-native",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "type": "module",
   "description": "把 NAS 上的 agent-wechat 接入 Coo：微信私聊和群聊各自成为独立会话，共用同一套模型、人格和 Memory。\n\n- 订阅 daemon 的 SSE 事件流，断线按游标续传，不重复交付同一条消息。\n- 每个联系人和群聊各有自己的上下文，互不串号；群聊里区分是谁在说话。\n- 发文字、引用回复、@群成员；发送带幂等键，超时后先查发送记录，不盲目重发。\n- 图片、文件、视频、语音先上传拿 source ID 再发送，不把大文件塞进正文。",
   "license": "AGPL-3.0-or-later",
