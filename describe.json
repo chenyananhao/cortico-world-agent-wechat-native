@@ -1,0 +1,232 @@
+{
+  "tools": [
+    {
+      "name": "awx_status",
+      "description": "查看 NAS 微信的连接状态、当前事件游标、最近一次收消息/错误/发送结果。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "看一眼 NAS 微信的连接、账号和事件流状态。",
+        "en": "Shows the NAS WeChat connection, account and stream state."
+      }
+    },
+    {
+      "name": "awx_threads",
+      "description": "列出微信会话（私聊与群聊），用于找到该回复哪个 threadId。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "最多返回几条，默认 20"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "列出最近的微信会话。",
+        "en": "Lists recent WeChat chats."
+      }
+    },
+    {
+      "name": "awx_messages",
+      "description": "读某个微信会话的最近消息。默认当前会话；给 threadId 可读别的会话（只读，不会串上下文）。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string",
+            "description": "微信会话 id；省略则用当前所在会话"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "默认 20"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "读某个会话最近的消息。",
+        "en": "Reads recent messages of one chat."
+      }
+    },
+    {
+      "name": "awx_contacts",
+      "description": "查微信联系人（可按名字搜索）。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "按名字/备注搜索，省略则列出最近联系人"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "默认 20"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "查微信联系人。",
+        "en": "Looks up WeChat contacts."
+      }
+    },
+    {
+      "name": "awx_send_text",
+      "description": "给微信会话发一条文字。默认发回当前会话；quoteMessageId 可引用回复；群聊里可用 mentions 点名。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "要发的文字"
+          },
+          "threadId": {
+            "type": "string",
+            "description": "目标会话 id；省略则发回当前会话"
+          },
+          "quoteMessageId": {
+            "type": "string",
+            "description": "要引用的微信消息 id（可选）"
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "要 @ 的群成员微信 id 列表（仅群聊有效）"
+          },
+          "mentionAll": {
+            "type": "boolean",
+            "description": "是否 @所有人（仅群聊，慎用）"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "往微信会话发一条文字，可引用、可 @。",
+        "en": "Sends text to a chat, optionally quoting or mentioning members."
+      }
+    },
+    {
+      "name": "awx_send_status",
+      "description": "查一条微信发送的真实状态（按 sendId 或幂等键）。结果不确定时先查这里，不要盲目重发。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sendId": {
+            "type": "string",
+            "description": "发送记录 id（awx_send_text/awx_send_media 返回的 sendId）"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "发送时用的幂等键（awx- 开头）"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "查一条发送的真实状态（按 sendId 或幂等键），不确定时先查再决定。",
+        "en": "Looks up the real state of a send by sendId or idempotency key."
+      }
+    },
+    {
+      "name": "awx_send_media",
+      "description": "给微信会话发图片/文件/视频/语音：先上传本地文件拿到 sourceId，再发送。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "本地文件绝对路径"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "对方看到的文件名；省略用本文件名"
+          },
+          "threadId": {
+            "type": "string",
+            "description": "目标会话 id；省略则发回当前会话"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "file",
+              "video",
+              "voice"
+            ],
+            "description": "附件类型"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "上传并发送图片、文件、视频或语音。",
+        "en": "Uploads and sends an image, file, video or voice clip."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "agentwechat.message",
+      "description": {
+        "zh": "收到一条微信消息，渲染成一行可读文本；每个会话独立进上下文。",
+        "en": "A WeChat message rendered as one readable line; each chat has its own context."
+      },
+      "trigger": "debounce"
+    },
+    {
+      "type": "agentwechat.receipt",
+      "description": {
+        "zh": "发送回执（accepted、failed 或 needs_review）；不唤醒模型。",
+        "en": "A send receipt (accepted, failed or needs_review); does not wake the model."
+      }
+    },
+    {
+      "type": "agentwechat.status",
+      "description": {
+        "zh": "连接、账号或事件流状态变化；不唤醒模型。",
+        "en": "A connection, account or stream state change; does not wake the model."
+      }
+    }
+  ],
+  "prompts": []
+}

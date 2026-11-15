@@ -1,0 +1,16 @@
+# 本地凭据（token 只来自 .env 或 SecretStore，绝不提交）
+.env
+.env.*
+
+# 状态与运行产物
+node_modules/
+*.log
+tests/fixtures/test-server.pfx
+tests/fixtures/test-ca.pem
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 交付报告（含本机路径与实机日志摘录，留在本地，不进公开仓库）
+DELIVERY.md
