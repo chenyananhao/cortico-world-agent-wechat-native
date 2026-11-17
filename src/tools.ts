@@ -3,13 +3,13 @@
  * 因此默认回复落到当前会话，而不是最近说话的那个人。
  */
 import { readFile } from 'node:fs/promises';
-import { basename } from 'node:path';
 import type { ToolCallContext, ToolDef, ToolOutcome, ToolSchema, ToolTag } from 'cortico/core/types.ts';
 import type { AgentWechatApiClient } from './api/client.ts';
 import { mimeOfFileName } from './api/multipart.ts';
 import type { NativeMediaKind } from './api/types.ts';
 import type { AgentWechatConfigSection } from './config.ts';
 import type { WorldStore } from './identity/store.ts';
+import { checkMediaPath } from './media-guard.ts';
 import type { Outbound } from './messaging/outbound.ts';
 import { sessionIdFor, threadIdHintFromSession } from './protocol.ts';
 
@@ -18,6 +18,8 @@ export interface ToolDeps {
   outbound: () => Outbound | null;
   store: WorldStore;
   config: () => AgentWechatConfigSection;
+  /** 允许 `awx_send_media` 读的目录（默认 `<dataDir>/outbox`）。 */
+  mediaRoot: () => string;
   status: () => string;
   log: { warn(message: string): void; debug?(message: string): void };
 }
@@ -209,11 +211,11 @@ const SPECS: ToolSpec[] = [
   {
     schema: {
       name: 'awx_send_media',
-      description: '给微信会话发图片/文件/视频/语音：先上传本地文件拿到 sourceId，再发送。',
+      description: '给微信会话发图片/文件/视频/语音：先上传本地文件拿到 sourceId，再发送。只能读发送目录里的文件。',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: '本地文件绝对路径' },
+          path: { type: 'string', description: '文件绝对路径；必须在发送目录内（默认 <dataDir>/outbox）' },
           fileName: { type: 'string', description: '对方看到的文件名；省略用本文件名' },
           threadId: { type: 'string', description: '目标会话 id；省略则发回当前会话' },
           kind: { type: 'string', enum: ['image', 'file', 'video', 'voice'], description: '附件类型' },
@@ -234,14 +236,18 @@ const SPECS: ToolSpec[] = [
       const path = text(args.path);
       if (!path) return '缺少 path：请给出本地文件绝对路径。';
 
-      // 发送前先确认文件可读，别把上传失败伪装成一句"已发送"。
+      // 闸门：只读发送目录里的普通文件（realpath 解析，符号链接指出去也拒绝）。
+      const check = await checkMediaPath(deps.mediaRoot(), path);
+      if (!check.ok) return check.reason;
+
+      // 校验通过后再真读一次：读失败要如实报，别把上传失败伪装成"已发送"。
       let bytes: Uint8Array;
       try {
-        bytes = await readFile(path);
+        bytes = await readFile(check.path);
       } catch (error) {
-        return `读不到文件：${path}（${error instanceof Error ? error.message : String(error)}）`;
+        return `读不到文件：${check.path}（${error instanceof Error ? error.message : String(error)}）`;
       }
-      const fileName = text(args.fileName) ?? basename(path);
+      const fileName = text(args.fileName) ?? check.name;
       const mimeType = mimeOfFileName(fileName);
 
       let upload: { sourceId: string; name: string; byteLength: number };

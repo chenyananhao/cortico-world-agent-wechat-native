@@ -8,14 +8,38 @@
 
 ## 前置条件（必须）
 
-1. **Coopanion 已装本仓库配套的 Core 补丁**（`core-patch/`，装法见那里的 `README.md`）。
-
-   本 World 用 `host.pushEvent(..., { session: 'wechat-<threadId>' })` 把每条微信消息投进"它自己的会话"。原版 Cortico Core 只允许一个接收事件的常驻 session，因此**没有补丁时**：消息仍能收到，但全部落到 `main` 会话里，联系人之间会串台。补丁给 Core 加了"多个接收事件 session"，并保持单 session 行为完全不变。
-
-   > 从扩展市场装上的是**同一个包**，补丁不在包里（它改的是 Coopanion 自己的 `resources\app`，必须本地安装）。不装补丁也能收发微信，只是所有联系人共用 `main` 一个上下文。
-
-2. NAS 上的 `agent-wechat-native` 在线，且 Coopanion 信任其 TLS 证书（安装 CA 到系统信任库，或在本 World 配置里填 `caCertFile`）。
+1. **Coopanion 已安装并能启动**（本 World 按 `cortico` api 6 编写；可选补丁按 0.2.20 的 Core 源码制作）。
+2. NAS 上的 `agent-wechat-native` 在线，且 Coopanion 信任其 TLS 证书（把 CA 装进系统信任库，或在本 World 配置里填 `caCertFile`）。
 3. 一个具备 `read` / `send` / `media` 权限的 API Token（不新建、不撤销，直接复用现有令牌）。
+
+**不装 Core 补丁也能用**：消息照收、语音照转、附件照发，只是所有联系人和群共用 `main` 一个会话上下文，会串台。想要「每个微信会话各自独立」，再装下面这个可选补丁。
+
+## 可选：Core 补丁（让每个联系人拥有独立会话）
+
+**作用**：原版 Core 要求一个 Persona「恰好一个」接收事件的常驻 session，且全进程只有一份 `session-main.jsonl`。这个补丁把限制打开：每个微信会话（私聊某联系人、某个群）各占一个 session，各有自己的对话历史、轮次预算与投递水位，同时共用同一套模型、人格、Memory 和工具表。
+
+- 代码与详细说明：<https://github.com/chenyananhao/cortico-world-agent-wechat-native/tree/main/core-patch>
+- npm 包里**不含**它（`files` 只发 `src`/`assets`/`describe.json` 等）；它改的是 Coopanion 自己的 `resources\app`，必须在本机安装、并且每次 Coopanion 升级后重装。
+
+安装（三步）：
+
+```powershell
+# 1. 取补丁（在仓库里，不在 npm 包里）
+git clone https://github.com/chenyananhao/cortico-world-agent-wechat-native.git
+cd cortico-world-agent-wechat-native\core-patch
+
+# 2. 预览 + 实际安装（自动备份到 backups\<时间戳>\）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+
+# 3. 重启 Coopanion（Core 以 --import tsx 直接跑 .ts 源码，重启即生效）
+```
+
+**回滚**：把 `core-patch\backups\<时间戳>\` 里的文件按相对路径覆盖回 `...\resources\app\`，再重启。
+
+**升级注意**：Coopanion 升级会覆盖这 5 个文件，补丁随之失效（表现为所有聊天又回到同一个上下文）；升级后重跑 `install.ps1`，并先比对新版源码再盖。
+
+**验收**：重启后每个微信会话会出现自己的 `session-wechat-*.jsonl`，`core-state.json` 的 `lastDeliveredCursorBySession` 里有对应条目，`session-main.jsonl` 不被微信消息污染。
 
 ## 安装
 
@@ -55,6 +79,7 @@ cmd /c mklink /J "$ext\node_modules\cortico-world-agent-wechat-native" "<本仓�
 | `groupMessagesEnabled` | 处理群聊 | `false` |
 | `groupMentionOnly` | 群聊只响应明确 @ 我的消息 | `true` |
 | `mediaEnabled` | 处理图片/文件/视频/语音 | `false` |
+| `mediaSendRoot` | `awx_send_media` 唯一允许读取的目录（绝对路径）；目录外的文件、符号链接指出去的、`.env`/`*.pem`/`*.key` 这类凭据文件一律拒发 | 空 = `<dataDir>/outbox`（启用媒体时自动创建） |
 | `voiceToTextEnabled` | 语音转文字（复用桌宠那套 SenseVoice） | `true` |
 | `voiceModelDir` | 语音模型目录；留空则自动定位桌宠那份（从 `CORTICO_HOME` 和 World 的 dataDir 往上找 `models/desktop-pet/<版本>`，找到真正有 `.onnx`+`tokens.txt` 的那层；版本号变了就取同目录第一份能用的） | 空 |
 | `voiceLanguage` | 语音识别语言：`auto` / `zh` / `en` / `ja` / `ko` / `yue` | `auto` |
@@ -112,8 +137,9 @@ cmd /c mklink /J "$ext\node_modules\cortico-world-agent-wechat-native" "<本仓�
 - 只用 `node:https`，`rejectUnauthorized` 永远 `true`，没有任何开关可以关掉证书校验。
 - Token 只在 `Authorization` 头里；错误信息与日志都脱敏。
 - World 侧不写聊天全文到日志，只记 `messageId`/`threadId`/长度等必要字段。
+- **发送目录闸门（v0.7.0，重要）**：`awx_send_media` 的 `path` 是模型填的、而模型的输入来自微信消息，所以不能让它读全盘。现在只允许读 `mediaSendRoot`（默认 `<dataDir>/outbox`）：两侧都 `realpath` 解析（符号链接/junction 指到目录外也算出去）、按相对路径判断包含关系（`..` 逃逸、换盘符都拒）、只接受普通文件、单文件 ≤ 64 MiB，并且连目录内的 `.env`/`*.pem`/`*.pfx`/`*.key`/`id_rsa*`/`credentials*` 这类凭据文件也拒发。被拒时模型会收到具体原因（哪个目录、为什么不许），不会静默失败。
 
-## 未实现（v0.6.1）
+## 未实现（v0.7.0）
 
 - Core 自带的会话历史/`sessionInfo`/`contextGauge` 面板仍只展示 `main`（Core 补丁的 v1 限制）；本 World 的 `threads` 面板列出每个微信会话与其 session id、最近活动。
 - 群成员 @ 的 `positions` 精确偏移未使用，只传 `userIds`（微信会自己按名字定位）。
@@ -121,6 +147,7 @@ cmd /c mklink /J "$ext\node_modules\cortico-world-agent-wechat-native" "<本仓�
 
 ## 已实现
 
+- **v0.7.0 发送目录闸门**：`awx_send_media` 不再能读任意路径，只接受 `mediaSendRoot`（默认 `<dataDir>/outbox`）里的普通文件；`realpath` 双向解析防符号链接逃逸，拒 `.env`/`*.pem`/`*.key`/`id_rsa*`/`credentials*` 等凭据文件，拒空文件与 >64 MiB（`src/media-guard.ts`，7 项单测）。启用媒体时 World 启动会建好这个目录，`awx_status` 与状态面板都会显示当前路径。
 - **v0.6.1 记忆分域**：`senderKey` 从 `account-…|wxid_…` 改成合法域 `awx.<联系人 id>` / `awx.g.<群号>`（`src/protocol.ts` 的 `memoryScopeOf()`），不再被 private-companion 的 `cleanScope()` 洗成 `main`；同时用 `src/ENV_PROMPT.md`（`webUi().promptDocs`，`role: 'envPrompt'`）把「主人事实写 `main`、检索用 `*`、群聊不进主人层」写进环境提示词。要生效得重启 Coopanion。
 - **v0.6.0 语音转文字**：微信语音（daemon 已转 `audio/wav` 16 kHz 单声道 PCM16）用桌宠那套 `sherpa-onnx-node` + SenseVoiceSmall 转写，正文变成 `（语音）好的好的。`，`meta.transcript` 带原文，`awx_status` 与状态面板显示「语音转写：已就绪（auto · model.int8.onnx · 已转 N 条）」。真机实测：模型载入 889 ms、2.06 s 语音转写 995 ms。只取 `state:"available"` 的音轨（同一条消息常另有一条 `pending`，取内容会 409）；失败写具体原因并照常投递；按 `${messageId}|${assetId}` 缓存，SSE 重放不重跑。
 - **v0.5.1 媒体发送不 400 了**：真机上 `POST /sends` 的媒体体多一个 `fileName` 就整单 `400 invalid_request`（A/B 实测：去掉即 202），现在只发 `kind + threadId + sourceId`；上传一直没问题（multipart 字段 `file`，中文文件名 26 KB webp 实测 201）。另外服务端只回错误码时，报错会带上原始响应体片段，方便下次定位。

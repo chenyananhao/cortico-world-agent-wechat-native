@@ -5,7 +5,7 @@
 import type { Language } from 'cortico/core/language.ts';
 import type { ConfigGroup } from 'cortico/core/types.ts';
 import { readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { awxText } from './strings.ts';
 
 export const AGENTWECHAT_ID = 'agentwechat';
@@ -31,6 +31,11 @@ export interface AgentWechatConfigSection {
   /** 群聊只有明确 @ 到本账号时才进上下文；关闭则群里说什么都收。 */
   groupMentionOnly: boolean;
   mediaEnabled: boolean;
+  /**
+   * `awx_send_media` 允许读取的目录；留空用 `<dataDir>/outbox`。
+   * 目录之外的文件（含符号链接指出去的）一律拒绝发送。
+   */
+  mediaSendRoot: string;
   /** 语音消息转成文字再进上下文；关掉就只留「（附件：语音）」。 */
   voiceToTextEnabled: boolean;
   /** 识别模型目录；留空用桌宠那份 SenseVoiceSmall。 */
@@ -57,6 +62,7 @@ export const AGENTWECHAT_DEFAULTS: AgentWechatConfigSection = {
   groupMessagesEnabled: false,
   groupMentionOnly: true,
   mediaEnabled: false,
+  mediaSendRoot: '',
   voiceToTextEnabled: true,
   voiceModelDir: '',
   voiceLanguage: 'auto',
@@ -71,6 +77,7 @@ export function normalizeConfig(raw: Partial<AgentWechatConfigSection> | undefin
   cfg.baseUrl = typeof cfg.baseUrl === 'string' ? cfg.baseUrl.trim() : '';
   cfg.accountId = typeof cfg.accountId === 'string' ? cfg.accountId.trim() : '';
   cfg.caCertFile = typeof cfg.caCertFile === 'string' ? cfg.caCertFile.trim() : '';
+  cfg.mediaSendRoot = typeof cfg.mediaSendRoot === 'string' ? cfg.mediaSendRoot.trim() : '';
   cfg.voiceModelDir = typeof cfg.voiceModelDir === 'string' ? cfg.voiceModelDir.trim() : '';
   cfg.voiceLanguage = typeof cfg.voiceLanguage === 'string' && cfg.voiceLanguage.trim() !== '' ? cfg.voiceLanguage.trim() : 'auto';
   cfg.allowedThreads = Array.isArray(cfg.allowedThreads)
@@ -97,6 +104,10 @@ export function validateConfig(cfg: AgentWechatConfigSection): void {
   }
   if (cfg.voiceModelDir && /[\r\n\0]/.test(cfg.voiceModelDir)) throw new Error('voiceModelDir 含非法字符');
   if (cfg.caCertFile && /[\r\n\0]/.test(cfg.caCertFile)) throw new Error('caCertFile 含非法字符');
+  if (cfg.mediaSendRoot) {
+    if (/[\r\n\0]/.test(cfg.mediaSendRoot)) throw new Error('mediaSendRoot 含非法字符');
+    if (!isAbsolute(cfg.mediaSendRoot)) throw new Error('mediaSendRoot 必须是绝对路径，例如 D:\\wechat-outbox');
+  }
 }
 
 /** SenseVoice 认这几种语言，其它值一律按 `auto` 交给模型自己判断。 */
@@ -151,6 +162,11 @@ export function defaultVoiceModelDir(dataDir?: string): string {
   return resolve(fallbackRoot, 'models', 'desktop-pet', SENSEVOICE_DIR);
 }
 
+/** `awx_send_media` 的默认发送目录：`<dataDir>/outbox`（World 启动时建出来）。 */
+export function defaultMediaSendRoot(dataDir: string): string {
+  return resolve(dataDir, 'outbox');
+}
+
 function integer(value: unknown, name: string, min: number, max: number): void {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
     throw new Error(`${name} 必须是 ${min}..${max} 之间的整数`);
@@ -177,6 +193,7 @@ export function agentWechatConfigGroup(language?: Language): ConfigGroup {
         [`${k}.groupMessagesEnabled`]: { type: 'boolean', title: t.groupMessagesEnabled, 'x-hot': true },
         [`${k}.groupMentionOnly`]: { type: 'boolean', title: t.groupMentionOnly, 'x-hot': true },
         [`${k}.mediaEnabled`]: { type: 'boolean', title: t.mediaEnabled, 'x-hot': true },
+        [`${k}.mediaSendRoot`]: { type: 'string', title: t.mediaSendRoot, 'x-hot': true },
         [`${k}.voiceToTextEnabled`]: { type: 'boolean', title: t.voiceToTextEnabled, 'x-hot': true },
         [`${k}.voiceModelDir`]: { type: 'string', title: t.voiceModelDir, 'x-hot': false },
         [`${k}.voiceLanguage`]: {

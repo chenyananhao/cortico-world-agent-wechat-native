@@ -67,5 +67,5 @@ node --import tsx --test tests\*.test.mjs                       # 需要 Coopani
 
 ## 6. 装到别人机器上的两个前置
 
-1. **Core 补丁**：包本身不修改 Coopanion。没有补丁时微信消息全部落 `main` 会话（能收发，但联系人之间串上下文）。补丁在本仓库 `core-patch/`（AGPL-3.0，与 Coopanion 同许可），`install.ps1` 一条命令装，Coopanion 升级后要重跑。
+1. **Core 补丁（可选）**：包本身不修改 Coopanion；**npm 包不含 `core-patch/`**（`files` 白名单里没有它），只有 GitHub 仓库有。没有补丁时微信消息全部落 `main` 会话（能收发、能转写、能发附件，但联系人之间串上下文）。补丁在 <https://github.com/chenyananhao/cortico-world-agent-wechat-native/tree/main/core-patch>（AGPL-3.0，与 Coopanion 同许可），`install.ps1` 一条命令装，Coopanion 升级后要重跑。README 里这一节必须写成「可选」，不要放进「前置条件（必须）」，否则市场用户会以为不装就装不上（市场反馈原话）。
 2. **Token**：写进部署的 `.env`（`CORTICO_AGENTWECHAT_TOKEN=…`）或配置面板的 Token 输入框；不会进 `config.json`，也不会出现在日志里。

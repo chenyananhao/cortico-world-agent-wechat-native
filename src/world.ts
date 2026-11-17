@@ -4,14 +4,15 @@
  * 全程复用 Coopanion 的模型、人格与 Memory。
  */
 import { fileURLToPath } from 'node:url';
+import { mkdirSync } from 'node:fs';
 import type { Language } from 'cortico/core/language.ts';
 import type { ToolDef, World, WorldHost, WorldWebUiDecl } from 'cortico/core/types.ts';
 import { AgentWechatApiClient } from './api/client.ts';
 import { EventPump } from './api/events.ts';
 import type { NativeEvent } from './api/types.ts';
 import {
-  AGENTWECHAT_CONSUMER, AGENTWECHAT_ID, AGENTWECHAT_TOKEN_ENV, agentWechatConfigGroup, defaultVoiceModelDir,
-  normalizeConfig, validateConfig, type AgentWechatConfigSection,
+  AGENTWECHAT_CONSUMER, AGENTWECHAT_ID, AGENTWECHAT_TOKEN_ENV, agentWechatConfigGroup, defaultMediaSendRoot,
+  defaultVoiceModelDir, normalizeConfig, validateConfig, type AgentWechatConfigSection,
 } from './config.ts';
 import { IdentityMap } from './identity/mapping.ts';
 import { WorldStore } from './identity/store.ts';
@@ -78,6 +79,15 @@ export class AgentWechatWorld implements World {
       return;
     }
     validateConfig(cfg);
+
+    // 发送目录：默认 <dataDir>/outbox，提前建出来，省得用户不知道该往哪放文件。
+    if (cfg.mediaEnabled) {
+      try {
+        mkdirSync(this.mediaRoot(), { recursive: true });
+      } catch (error) {
+        host.log.warn(`发送目录建不出来：${this.mediaRoot()}（${error instanceof Error ? error.message : String(error)}）`);
+      }
+    }
 
     let token: string;
     try {
@@ -285,12 +295,19 @@ export class AgentWechatWorld implements World {
     this.sse = 'idle';
   }
 
+  /** `awx_send_media` 只能读这个目录：配置优先，留空用 `<dataDir>/outbox`。 */
+  mediaRoot(): string {
+    const configured = this.cfg.mediaSendRoot.trim();
+    return configured !== '' ? configured : defaultMediaSendRoot(this.ctx.dataDir);
+  }
+
   tools(): ToolDef[] {
     return buildTools({
       client: () => this.client,
       outbound: () => this.outbound,
       store: this.store,
       config: () => this.cfg,
+      mediaRoot: () => this.mediaRoot(),
       status: () => this.statusText(),
       log: { warn: (m) => this.host?.log.warn(m), debug: (m) => this.host?.log.debug?.(m) },
     });
@@ -369,6 +386,7 @@ export class AgentWechatWorld implements World {
       delivered: this.delivered,
       skipped: this.skipped,
       lastSend: this.lastSend,
+      mediaRoot: this.mediaRoot(),
       voice: this.voice ? this.voice.stats() : { enabled: false },
       threads: this.store.threads().length,
       threadList: this.threadList(),
@@ -413,6 +431,7 @@ export class AgentWechatWorld implements World {
       `最近事件：${this.lastEventAt ?? '（无）'}`,
       `已投递：${this.delivered}`,
       `语音转写：${this.voiceLine()}`,
+      `发送目录：${this.mediaRoot()}（awx_send_media 只能读这里的文件）`,
       `最后错误：${this.lastError ?? '（无）'}`,
     ];
     if (this.lastSend) {

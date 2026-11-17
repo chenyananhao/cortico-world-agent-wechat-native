@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 0.7.0 — 2026-11-17
+
+- **发送目录闸门（安全，重要）**：`awx_send_media` 的 `path` 是模型填的，而模型的输入来自微信消息，等于「远道而来的文本可以指定读本机任意文件」——市场上因此被打了 `unsafe` 标签。现在只允许读 `mediaSendRoot`：新增配置项（留空 = `<dataDir>/outbox`，启用媒体时 World 启动会自动创建）。`src/media-guard.ts` 的 `checkMediaPath(root, requested)` 做四件事：两侧 `realpath` 解析（符号链接、junction 指到目录外也算出去）、按相对路径判断包含关系（`..` 逃逸、换盘符都拒）、只接受普通文件、单文件 ≤ 64 MiB；另外连目录内的 `.env`/`*.pem`/`*.pfx`/`*.p12`/`*.key`/`id_rsa*`/`credentials*` 这类凭据文件也拒发。被拒时把具体原因（哪个目录、为什么不许）原样还给模型，不静默失败。`awx_status` 与状态面板都会显示当前发送目录。
+- `mediaSendRoot` 校验：必须是绝对路径（`D:\wechat-outbox` 这种），相对路径直接报配置错误；`normalizeConfig` 会 trim。
+- **Core 补丁改为「可选」**：README 不再把补丁写成「前置条件（必须）」，而是独立一节「可选：Core 补丁（让每个联系人拥有独立会话）」，写明作用、GitHub 位置（`core-patch/`，npm 包不含）、三步安装、回滚、升级注意、验收方式；并在前置条件里明确「不装补丁也能用，只是所有聊天共用 `main` 上下文」。
+- `core-patch/` 随仓库补齐：`tests/state-watermark.mjs`（14 项断言）与 `backups/.gitkeep` 入库；补丁 README 的验证命令改成占位路径（不再硬编作者机器上的 `D:/002Apps/...`）。
+- 测试：新增 `tests/media-guard.test.mjs`（7 项：目录内通过、`..` 逃逸、junction 逃逸、目录本身、目录不存在、凭据文件名、空文件与超大文件）；回归 `config`/`tools`/`world-lifecycle`/`media` 共 18 项 → 全绿。
+
 ## 0.6.4 — 2026-11-16
 - 调整下简介显示为中文
 

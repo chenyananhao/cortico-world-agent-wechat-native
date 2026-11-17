@@ -3,6 +3,9 @@
 给 Coopanion 0.2.20 自带的 Core / Persona 打的最小改动：让同一个 Persona、同一套模型与 Memory
 可以同时拥有多个**互相独立上下文**的常驻会话，每个外部聊天（微信联系人、群聊）各占一个。
 
+> 这个补丁**不在 npm 包里**，只随 GitHub 仓库提供（`core-patch/` 目录：<https://github.com/chenyananhao/cortico-world-agent-wechat-native/tree/main/core-patch>）。
+> 它改的是 Coopanion 自己的 `resources\app`，必须在本机安装；不打补丁扩展照样能用，只是所有聊天共用一个 `main` 上下文。
+
 ## 为什么需要
 
 Coopanion 的公开 World 扩展接口（cortico api 6）**无法**做到按会话隔离：
@@ -22,7 +25,7 @@ Coopanion 的公开 World 扩展接口（cortico api 6）**无法**做到按会�
 | `build/cortico/src/core/state.ts` | 每会话投递水位 `lastDeliveredCursorBySession`；`main` 仍用旧的 `lastDeliveredCursor` 字段（旧状态文件可无缝读取）。 |
 | `build/cortico/src/core/loop.ts` | `MainLoop` 按 `sessionId` 记水位、只走属于自己的事件（`isMine`）。 |
 | `build/cortico/src/core/core.ts` | 允许多个接收会话：每个会话一套 `SessionLog` + `WakeBus` + `MainLoop`；`pushEvent` 按 `opts.session` 路由；启动/停止/系统前缀重建全部扇形展开；懒装配（首次投递到一个新 id 时向 Persona 要声明）。上限 32 个。 |
-| `app/core/persona.ts` | `CoopanionPersona.declareSession()`：接受 `wechat-*` 的会话 id，给它与主会话相同的轮数上限、同一份 Memory/文件工具面，外加 `awx_` 前缀的 World 工具。 |
+| `app/core/persona.ts` | `CoopanionPersona.declareSession()`：接受 `wechat-*` 的会话 id，给它与主会话相同的轮数上限、同一份 Memory/文件工具面，外加**全部** World 工具（`this.ioTools()`，含 `dsh_send`、`weather_*`、桌宠的 `pet_*`/`companion_*` 等）。 |
 
 行为兼容：Persona 只声明一个会话时，行为和改动前完全一致（`main` 优先，否则第一个接收会话当主会话）。
 
@@ -68,10 +71,12 @@ Copy-Item -Recurse -Force .\backups\<时间戳>\* 'D:\002Apps\Coopanion\resource
 ## 验证
 
 ```powershell
-# 语法门（无 tsc 可用）
-node 'D:\002Apps\Coopanion\resources\app\node_modules\esbuild\bin\esbuild' files\build\cortico\src\core\core.ts --target=node22
-# 运行时装载（走真实 cortico/* 解析器）
-node --import tsx tests\state-watermark.mjs
+# 语法门（Coopanion 不带 tsc；用应用自带的 esbuild 当解析器）
+node '<你的 Coopanion 安装目录>\resources\app\node_modules\esbuild\bin\esbuild' files\build\cortico\src\core\core.ts --target=node22
+
+# 水位/状态文件测试：必须在 Coopanion 的 resources\app 下跑（借它的 tsx 与 cortico/* 解析器）
+cd '<你的 Coopanion 安装目录>\resources\app'
+node --import tsx '<本补丁目录>\tests\state-watermark.mjs'
 ```
 
 `tests\state-watermark.mjs` 覆盖：新老水位共存、保存/重载、`clear()` 保留水位、旧状态文件迁移、脏数据丢弃。14 项断言全绿。
@@ -80,7 +85,7 @@ node --import tsx tests\state-watermark.mjs
 
 ```
 files\       改动后的完整文件（按安装后的相对路径）
-backups\     每次安装前的原文件备份
-tests\       水位与状态文件测试
 install.ps1  安装脚本（ASCII，带 -DryRun）
+tests\       水位与状态文件测试
+backups\     每次安装前的原文件备份（首次安装后才会有内容）
 ```

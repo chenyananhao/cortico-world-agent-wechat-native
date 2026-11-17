@@ -163,13 +163,13 @@
     },
     {
       "name": "awx_send_media",
-      "description": "给微信会话发图片/文件/视频/语音：先上传本地文件拿到 sourceId，再发送。",
+      "description": "给微信会话发图片/文件/视频/语音：先上传本地文件拿到 sourceId，再发送。只能读发送目录里的文件。",
       "parameters": {
         "type": "object",
         "properties": {
           "path": {
             "type": "string",
-            "description": "本地文件绝对路径"
+            "description": "文件绝对路径；必须在发送目录内（默认 <dataDir>/outbox）"
           },
           "fileName": {
             "type": "string",

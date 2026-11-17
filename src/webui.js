@@ -29,6 +29,7 @@ const zh = {
   lastEvent: '最近事件',
   lastError: '最后错误',
   lastSend: '最近发送',
+  mediaRoot: '发送目录',
   tokenTitle: 'API Token',
   tokenDesc: '令牌只写入部署目录的 .env，不写 config.json，也不会回显。保存后会自动重连。',
   tokenPlaceholder: '粘贴 Bearer Token（不会显示原文）',
@@ -129,6 +130,7 @@ export default {
             ],
             [t.lastError, data.lastError || t.none],
             [t.voice, voiceLine(data.voice)],
+            [t.mediaRoot, data.mediaRoot || t.none],
           ];
           for (const [k, v] of rows) {
             const tr = document.createElement('tr');

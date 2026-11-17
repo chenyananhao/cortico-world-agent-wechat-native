@@ -14,6 +14,7 @@ export interface AgentWechatText {
   groupMessagesEnabled: string;
   groupMentionOnly: string;
   mediaEnabled: string;
+  mediaSendRoot: string;
   voiceToTextEnabled: string;
   voiceModelDir: string;
   voiceLanguage: string;
@@ -55,6 +56,7 @@ const ZH: AgentWechatText = {
   groupMessagesEnabled: '处理群聊',
   groupMentionOnly: '群聊仅在被 @ 时响应',
   mediaEnabled: '处理图片、文件、视频、语音',
+  mediaSendRoot: '允许发送的目录（留空用 <dataDir>/outbox）',
   voiceToTextEnabled: '语音转文字',
   voiceModelDir: '语音模型目录（留空用桌宠那份）',
   voiceLanguage: '语音识别语言',
@@ -96,6 +98,7 @@ const EN: AgentWechatText = {
   groupMessagesEnabled: 'Handle groups',
   groupMentionOnly: 'Groups: reply only when mentioned',
   mediaEnabled: 'Handle images, files, video and voice',
+  mediaSendRoot: 'Folder that may be sent (empty = <dataDir>/outbox)',
   voiceToTextEnabled: 'Transcribe voice messages',
   voiceModelDir: 'Speech model folder (empty uses the desktop pet one)',
   voiceLanguage: 'Speech language',
