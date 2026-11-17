@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.7.0 — 2026-11-17
+## 0.7.1 — 2026-11-17
+
+> 0.7.0 与 0.7.1 内容完全相同：0.7.0 的 npm 发布是异步处理，`PUT` 返回 202 后十几分钟才出现，期间我误判为失败又发了 0.7.1。两个版本都可用，`latest` 指向 0.7.1。
 
 - **发送目录闸门（安全，重要）**：`awx_send_media` 的 `path` 是模型填的，而模型的输入来自微信消息，等于「远道而来的文本可以指定读本机任意文件」——市场上因此被打了 `unsafe` 标签。现在只允许读 `mediaSendRoot`：新增配置项（留空 = `<dataDir>/outbox`，启用媒体时 World 启动会自动创建）。`src/media-guard.ts` 的 `checkMediaPath(root, requested)` 做四件事：两侧 `realpath` 解析（符号链接、junction 指到目录外也算出去）、按相对路径判断包含关系（`..` 逃逸、换盘符都拒）、只接受普通文件、单文件 ≤ 64 MiB；另外连目录内的 `.env`/`*.pem`/`*.pfx`/`*.p12`/`*.key`/`id_rsa*`/`credentials*` 这类凭据文件也拒发。被拒时把具体原因（哪个目录、为什么不许）原样还给模型，不静默失败。`awx_status` 与状态面板都会显示当前发送目录。
 - `mediaSendRoot` 校验：必须是绝对路径（`D:\wechat-outbox` 这种），相对路径直接报配置错误；`normalizeConfig` 会 trim。
