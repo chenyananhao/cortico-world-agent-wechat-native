@@ -30,6 +30,8 @@ type SseState = 'idle' | 'connecting' | 'open' | 'closed' | 'error';
 const MAX_EVENT_ATTEMPTS = 3;
 /** 周期补查发送状态：把本地 queued/unknown 的记录追到服务端终态。 */
 const SETTLE_INTERVAL_MS = 45_000;
+/** 每 15 秒刷新一次 NAS 微信账号状态。 */
+const STATUS_INTERVAL_MS = 15_000;
 
 export class AgentWechatWorld implements World {
   readonly id = AGENTWECHAT_ID;
@@ -45,7 +47,22 @@ export class AgentWechatWorld implements World {
   private abort: AbortController | null = null;
 
   private sse: SseState = 'idle';
+  private apiOnline: boolean | null = null;
+  private accountAuthenticated: boolean | null = null;
+  private accountConnection: string | null = null;
   private accountOnline: boolean | null = null;
+  private autoConnect: boolean | null = null;
+  private contactSyncReady: boolean | null = null;
+  private incomingTransport: string | null = null;
+  private nativeRuntime: boolean | null = null;
+  private ownUsername: string | null = null;
+  private pendingProjectionBatches: number | null = null;
+  private schemaCompatibility: string | null = null;
+  private storageMode: string | null = null;
+  private lastStatusCheckAt: string | null = null;
+  private lastErrorSource: string | null = null;
+  private lastErrorAt: string | null = null;
+  private statusTimer: ReturnType<typeof setInterval> | null = null;
   private lastEventAt: string | null = null;
   private lastEventKind: string | null = null;
   private lastError: string | null = null;
@@ -70,6 +87,8 @@ export class AgentWechatWorld implements World {
   async start(host: WorldHost): Promise<void> {
     this.host = host;
     this.lastError = null;
+    this.lastErrorSource = null;
+    this.lastErrorAt = null;
     this.stuckKey = null;
     this.stuckCount = 0;
     this.skipped = 0;
@@ -127,6 +146,11 @@ export class AgentWechatWorld implements World {
     });
 
     await this.refreshAccount();
+    // 定期刷新 NAS API 与微信账号状态；与网页 5 秒快照刷新相互独立。
+    this.statusTimer = setInterval(() => {
+      void this.refreshAccount();
+    }, STATUS_INTERVAL_MS);
+    this.statusTimer.unref?.();
     // 上次运行留下的"结果未知"发送，启动后补查一次；查到终态就订正本地记录。
     void this.reconcileSends();
     // 之后周期性补查：重启后新发的 queued 记录没人追，本地就会一直停在"未确认"。
@@ -164,9 +188,16 @@ export class AgentWechatWorld implements World {
       cursor: () => this.store.cursor,
       onState: (state, detail) => {
         this.sse = state;
-        // 连上了就把上次的断线/abort 痕迹清掉，否则面板会一直挂着一条早就恢复的错误。
-        if (state === 'open') this.lastError = null;
-        else if (state === 'error' && detail) this.lastError = detail;
+        // 只清除 SSE 自己产生的错误，不能误删 API 或账号认证错误。
+        if (state === 'open' && this.lastErrorSource === 'sse') {
+          this.lastError = null;
+          this.lastErrorSource = null;
+          this.lastErrorAt = null;
+        } else if (state === 'error' && detail) {
+          this.lastError = detail;
+          this.lastErrorSource = 'sse';
+          this.lastErrorAt = new Date().toISOString();
+        }
         host.log.info(`事件流状态：${state}${detail ? `（${detail}）` : ''}`);
       },
       open: (after, signal) => this.client!.openEventStream(cfg.accountId, after, signal),
@@ -175,6 +206,8 @@ export class AgentWechatWorld implements World {
 
     void this.pump.run().catch((error: unknown) => {
       this.lastError = error instanceof Error ? error.message : String(error);
+      this.lastErrorSource = 'sse';
+      this.lastErrorAt = new Date().toISOString();
       this.sse = 'error';
       host.log.error(`事件循环退出：${this.lastError}`);
     });
@@ -211,6 +244,8 @@ export class AgentWechatWorld implements World {
     this.stuckKey = null;
     this.stuckCount = 0;
     this.lastError = `已跳过一条无法处理的消息（${key}）：${reason}`;
+    this.lastErrorSource = 'message';
+    this.lastErrorAt = new Date().toISOString();
     this.host?.log.error(`事件 ${key} 连续处理失败 ${MAX_EVENT_ATTEMPTS} 次，跳过并推进游标：${reason}`);
     await this.commit(event);
   }
@@ -232,14 +267,68 @@ export class AgentWechatWorld implements World {
   }
 
   private async refreshAccount(): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      this.apiOnline = false;
+      this.accountAuthenticated = null;
+      this.accountConnection = null;
+      this.accountOnline = null;
+      return;
+    }
+
+    this.lastStatusCheckAt = new Date().toISOString();
     try {
       const accounts = await this.client.accounts();
+      this.apiOnline = true;
       const account = accounts.items.find((item) => item.id === this.cfg.accountId);
-      this.accountOnline = account ? account.state !== 'offline' : null;
+
+      if (!account) {
+        this.accountAuthenticated = null;
+        this.accountConnection = null;
+        this.accountOnline = null;
+        this.lastError = `NAS 中找不到配置的微信账号：${this.cfg.accountId}`;
+        this.lastErrorSource = 'account';
+        this.lastErrorAt = new Date().toISOString();
+        return;
+      }
+
+      this.accountAuthenticated = typeof account.authenticated === 'boolean' ? account.authenticated : null;
+      this.accountConnection = account.connection ?? null;
+      this.accountOnline = account.connection === 'online' ? true : account.connection === 'offline' ? false : null;
+      this.autoConnect = typeof account.autoConnect === 'boolean' ? account.autoConnect : null;
+      this.contactSyncReady = typeof account.contactSyncReady === 'boolean' ? account.contactSyncReady : null;
+      this.incomingTransport = account.incomingTransport ?? null;
+      this.nativeRuntime = typeof account.nativeRuntime === 'boolean' ? account.nativeRuntime : null;
+      this.ownUsername = account.ownUsername ?? null;
+      this.pendingProjectionBatches = typeof account.pendingProjectionBatches === 'number' ? account.pendingProjectionBatches : null;
+      this.schemaCompatibility = account.schemaCompatibility ?? null;
+      this.storageMode = account.storageMode ?? null;
+
+      if (this.lastErrorSource === 'api') {
+        this.lastError = null;
+        this.lastErrorSource = null;
+        this.lastErrorAt = null;
+      }
+      if (this.accountAuthenticated === true && this.accountOnline === true && this.lastErrorSource === 'account') {
+        this.lastError = null;
+        this.lastErrorSource = null;
+        this.lastErrorAt = null;
+      } else if (this.accountAuthenticated === false) {
+        this.lastError = '微信账号尚未完成登录认证';
+        this.lastErrorSource = 'account';
+        this.lastErrorAt = new Date().toISOString();
+      } else if (this.accountOnline === false) {
+        this.lastError = `微信账号当前连接状态：${this.accountConnection ?? 'offline'}`;
+        this.lastErrorSource = 'account';
+        this.lastErrorAt = new Date().toISOString();
+      }
     } catch (error) {
+      this.apiOnline = false;
+      this.accountAuthenticated = null;
+      this.accountConnection = null;
       this.accountOnline = null;
       this.lastError = error instanceof Error ? error.message : String(error);
+      this.lastErrorSource = 'api';
+      this.lastErrorAt = new Date().toISOString();
     }
   }
 
@@ -276,6 +365,10 @@ export class AgentWechatWorld implements World {
   }
 
   async stop(): Promise<void> {
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = null;
+    }
     if (this.settleTimer) {
       clearInterval(this.settleTimer);
       this.settleTimer = null;
@@ -293,6 +386,10 @@ export class AgentWechatWorld implements World {
     this.identity = null;
     this.host = null;
     this.sse = 'idle';
+    this.apiOnline = null;
+    this.accountAuthenticated = null;
+    this.accountConnection = null;
+    this.accountOnline = null;
   }
 
   /** `awx_send_media` 只能读这个目录：配置优先，留空用 `<dataDir>/outbox`。 */
@@ -323,7 +420,9 @@ export class AgentWechatWorld implements World {
     return {
       label: text.worldLabel,
       lamps: [
-        { label: text.connection, state: this.accountOnline === null ? 'offline' : this.accountOnline ? 'online' : 'error', hint: this.lastError ?? undefined },
+        { label: 'NAS API', state: this.apiOnline === null ? 'loading' : this.apiOnline ? 'online' : 'error', hint: this.apiOnline === false ? this.lastError ?? 'NAS API 不可访问' : undefined },
+        { label: '微信登录', state: this.accountAuthenticated === null ? 'loading' : this.accountAuthenticated ? 'online' : 'error', hint: this.accountAuthenticated === true ? '已认证' : '未认证或未知' },
+        { label: '微信连接', state: this.accountOnline === null ? 'loading' : this.accountOnline ? 'online' : 'error', hint: this.accountConnection ?? '状态未知' },
         { label: text.stream, state: this.lampState(), hint: this.sse },
       ],
       badges: [
@@ -377,7 +476,21 @@ export class AgentWechatWorld implements World {
       enabled: this.cfg.enabled,
       baseUrl: this.cfg.baseUrl,
       accountId: this.cfg.accountId,
+      apiOnline: this.apiOnline,
+      accountAuthenticated: this.accountAuthenticated,
+      accountConnection: this.accountConnection,
       accountOnline: this.accountOnline,
+      autoConnect: this.autoConnect,
+      contactSyncReady: this.contactSyncReady,
+      incomingTransport: this.incomingTransport,
+      nativeRuntime: this.nativeRuntime,
+      ownUsername: this.ownUsername,
+      pendingProjectionBatches: this.pendingProjectionBatches,
+      schemaCompatibility: this.schemaCompatibility,
+      storageMode: this.storageMode,
+      lastStatusCheckAt: this.lastStatusCheckAt,
+      lastErrorSource: this.lastErrorSource,
+      lastErrorAt: this.lastErrorAt,
       sse: this.sse,
       cursor: this.store.cursor,
       lastEventAt: this.lastEventAt,
@@ -425,7 +538,15 @@ export class AgentWechatWorld implements World {
     const lines = [
       `启用：${cfg.enabled ? '是' : '否'}`,
       `地址：${cfg.baseUrl || '（未配置）'}`,
-      `账号：${cfg.accountId || '（未配置）'}（${this.accountOnline === null ? '状态未知' : this.accountOnline ? '在线' : '异常'}）`,
+      `账号：${cfg.accountId || '（未配置）'}`,
+      `微信登录：${this.accountAuthenticated === null ? '未知' : this.accountAuthenticated ? '已登录' : '未登录'}`,
+      `微信连接：${this.accountConnection ?? '未知'}`,
+      `联系人同步：${this.contactSyncReady === null ? '未知' : this.contactSyncReady ? '已就绪' : '未就绪'}`,
+      `自动连接：${this.autoConnect === null ? '未知' : this.autoConnect ? '开启' : '关闭'}`,
+      `消息接收方式：${this.incomingTransport ?? '未知'}`,
+      `待处理投影批次：${this.pendingProjectionBatches ?? '未知'}`,
+      `Schema 兼容性：${this.schemaCompatibility ?? '未知'}`,
+      `最近状态检查：${this.lastStatusCheckAt ?? '尚未检查'}`,
       `事件流：${this.sse}`,
       `游标：${this.store.cursor ?? '（尚未消费）'}`,
       `最近事件：${this.lastEventAt ?? '（无）'}`,
@@ -433,6 +554,8 @@ export class AgentWechatWorld implements World {
       `语音转写：${this.voiceLine()}`,
       `发送目录：${this.mediaRoot()}（awx_send_media 只能读这里的文件）`,
       `最后错误：${this.lastError ?? '（无）'}`,
+      `错误来源：${this.lastErrorSource ?? '（无）'}`,
+      `错误时间：${this.lastErrorAt ?? '（无）'}`,
     ];
     if (this.lastSend) {
       lines.push(`最近发送：${this.lastSend.state}${this.lastSend.sendId ? `（sendId=${this.lastSend.sendId}）` : ''}${this.lastSend.error ? ` ${this.lastSend.error}` : ''}`);

@@ -173,7 +173,27 @@ export interface NativeIdentity {
 export interface NativeAccount {
   id: string;
   alias?: string | null;
-  /** `online` / `offline` / 等。 */
-  status?: string;
+  /** 是否已经完成微信登录认证。 */
+  authenticated?: boolean;
+  /** 是否启用自动连接。 */
+  autoConnect?: boolean;
+  /** online / offline 等连接状态。 */
+  connection?: string;
+  /** 联系人同步是否就绪。 */
+  contactSyncReady?: boolean;
+  /** 消息接收传输方式，例如 native_push。 */
+  incomingTransport?: string;
+  /** 是否运行原生运行环境。 */
+  nativeRuntime?: boolean;
+  ownUsername?: string | null;
+  pendingCursorProjection?: boolean;
+  pendingMessageRecalls?: number;
+  pendingProjectionBatches?: number;
+  pendingReadProjections?: number;
+  pendingRecallProjections?: number;
+  pendingSavedLoginProjection?: boolean;
+  profileRecoveryPending?: boolean;
+  schemaCompatibility?: string;
+  storageMode?: string;
   [key: string]: unknown;
 }

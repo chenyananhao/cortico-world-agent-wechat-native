@@ -56,7 +56,7 @@ PowerShell 若提示“禁止运行脚本”，用上面带 `-ExecutionPolicy By
 ## 回滚
 
 ```powershell
-Copy-Item -Recurse -Force .\backups\<时间戳>\* 'D:\002Apps\Coopanion\resources\app\'
+Copy-Item -Recurse -Force .\backups\<时间戳>\* '<Coopanion>\resources\app\'
 ```
 
 然后重启 Coopanion。备份是按相对路径原样保存的。

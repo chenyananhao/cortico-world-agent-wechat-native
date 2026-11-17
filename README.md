@@ -47,7 +47,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 ```powershell
 # 一条命令装好（改 data 目录时传 -ExtensionsDir；先 -DryRun 看一眼）
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -ExtensionsDir D:\002Apps\Coopanion\data\extensions
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -ExtensionsDir '<Data>\extensions'
 ```
 
 它只做三件事，且都留时间戳备份：在 `extensions/package.json` 的 `dependencies` 里加一条 `link:`（跨盘时用绝对路径，pnpm 也认）、在 `node_modules` 下建指向本仓库的 junction、在 `world-owners.json` 里登记 `agentwechat`。
@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -ExtensionsDir
 手工等价步骤：
 
 ```powershell
-$ext = 'D:\002Apps\Coopanion\data\extensions'
+$ext = '<Data>\extensions'
 cmd /c mklink /J "$ext\node_modules\cortico-world-agent-wechat-native" "<本仓库路径>"
 # 再往 $ext\package.json 的 dependencies 里加：
 #   "cortico-world-agent-wechat-native": "link:<本仓库路径，跨盘用绝对路径>"
@@ -103,6 +103,19 @@ cmd /c mklink /J "$ext\node_modules\cortico-world-agent-wechat-native" "<本仓�
 | `awx_send_media` | write | 媒体发送：先上传拿 sourceId，再按 sourceId 发 |
 
 `awx_send_text` 的目标会话来自**工具调用上下文里的 session**（`ctx.role`），不是模型嘴里说的 id —— 这样回复必然回到产生消息的那个微信会话。
+
+## 运行状态监控（0.7.2）
+
+状态面板分别监控以下项目：
+
+- **NAS API**：accounts API 是否可访问。
+- **微信登录**：读取账号的 `authenticated`，显示已登录/未登录/未知。
+- **微信连接**：读取 `connection`，显示在线/离线/其他原始状态。
+- **消息事件流**：独立显示 SSE 连接状态。
+- **账号运行详情**：自动连接、联系人同步、接收传输方式、原生运行环境、待处理投影批次、Schema 兼容性和存储模式。
+- **错误记录**：显示最近错误内容、来源和发生时间。
+
+World 启动时立即检查一次账号状态，之后每 15 秒向 NAS 查询一次；网页仍按原有 5 秒周期刷新快照。监控只读，不会触发登录、退出、重连或清理 NAS 数据。
 
 ## 事件
 

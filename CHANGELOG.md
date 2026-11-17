@@ -1,4 +1,12 @@
 # CHANGELOG
+## 0.7.2 — 2026-11-18
+
+- **新增：NAS 微信运行监控面板**。分别显示 NAS API 可达性、微信登录认证（authenticated）、微信连接（connection）、SSE 消息事件流；不再把 API 正常误当成微信已登录。
+- **新增：账号运行详情**。展示自动连接、联系人同步、消息接收方式、原生运行环境、待处理投影批次、Schema 兼容性和存储模式。
+- **新增：状态自动刷新**。World 启动时检查一次，此后每 15 秒重新读取 NAS accounts API；网页面板继续按原有 5 秒周期刷新快照。
+- **改进：错误可追踪**。记录 API、账号、SSE、消息处理错误的来源与时间；SSE 恢复时只清除 SSE 自身错误，避免覆盖其他错误。
+- **修复：账号状态字段**。按 agent-wechat-native 2.4.0 实际返回的 authenticated / connection 等字段读取，不再读取不存在的 account.state。
+
 
 ## 0.7.1 — 2026-11-17
 
@@ -19,7 +27,7 @@
 ## 0.6.2 — 2026-11-16
 
 - **修默认语音模型目录**：旧版按固定层数拼 `dataDir/../models/...`，但 World 的 `dataDir` 是 `<CORTICO_HOME>/companion/data`（和模型目录差两层），于是拼出 `data/home/companion/models/...` —— 重启后 `awx_status` 显示「找不到模型文件」。现在 `defaultVoiceModelDir()` 先看 `CORTICO_HOME`，再从 `dataDir` 往上试 5 级，**只有真的含 `.onnx` + `tokens.txt` 的那层才算**；模型版本号变了就取 `models/desktop-pet/` 下第一份能用的；一份都没有时返回最可能的路径，让报错指得到位置。`worlds.agentwechat.voiceModelDir` 手填仍然优先。
-- 测试：`tests/config.test.mjs` 新增「从 dataDir 往上找到真正的 models/desktop-pet」，覆盖两层差距、版本改名、仅 `CORTICO_HOME`、全都缺失四种情形 → 5/5 通过。真机核对：`D:\002Apps\Coopanion\data\home\companion\data` → `D:\002Apps\Coopanion\data\home\models\desktop-pet\sensevoice-small-int8-2024-07-17`（存在）。
+- 测试：`tests/config.test.mjs` 新增「从 dataDir 往上找到真正的 models/desktop-pet」，覆盖两层差距、版本改名、仅 `CORTICO_HOME`、全都缺失四种情形 → 5/5 通过。真机核对：`<Data>\home\companion\data` → `<Data>\home\models\desktop-pet\sensevoice-small-int8-2024-07-17`（存在）。
 - 生效需要重启 Coopanion。
 - **扩展市场打包元数据**：去掉 `private`；补齐 `author` / `homepage` / `repository` / `bugs` / `publishConfig`；`cortico.tags` 对齐官方词表（`im`、`voice`、`local`、`external-setup`、`unofficial-api`、`injection-risk`、`experimental`）；`files` 带上 `LICENSE`（AGPL-3.0-or-later 全文）；README 与 `src/config.ts` 的示例值去掉真实账号与内网地址。发布流程见 `PUBLISHING.md`。
 

@@ -17,8 +17,20 @@ const zh = {
   refresh: '刷新',
   refreshing: '读取中…',
   failed: '读取失败',
-  api: 'API 连接',
-  stream: '事件流',
+  api: 'NAS API',
+  login: '微信登录',
+  connection: '微信连接',
+  stream: '消息事件流',
+  autoConnect: '自动连接',
+  contactSync: '联系人同步',
+  incomingTransport: '消息接收方式',
+  nativeRuntime: '原生运行环境',
+  projectionBatches: '待处理投影批次',
+  schemaCompatibility: 'Schema 兼容性',
+  storageMode: '存储模式',
+  statusCheck: '最近状态检查',
+  errorSource: '错误来源',
+  errorAt: '错误时间',
   cursor: '事件游标',
   threads: '会话数',
   delivered: '本次投递',
@@ -63,6 +75,32 @@ function stamp(t) {
 
 function errorText(err) {
   return err && err.message ? err.message : String(err);
+}
+function yesNo(value) {
+  if (value === true) return '是';
+  if (value === false) return '否';
+  return '未知';
+}
+function apiStatus(value) {
+  if (value === true) return '连接正常';
+  if (value === false) return '连接失败';
+  return '未知';
+}
+function loginStatus(value) {
+  if (value === true) return '已登录';
+  if (value === false) return '未登录';
+  return '未知';
+}
+function connectionStatus(value) {
+  if (value === 'online') return '在线';
+  if (value === 'offline') return '离线';
+  if (value === 'connecting') return '连接中';
+  return value || '未知';
+}
+function syncStatus(value) {
+  if (value === true) return '已就绪';
+  if (value === false) return '未就绪';
+  return '未知';
 }
 
 /** 语音转写一行：不开 / 等载入 / 已就绪，外加模型与上次失败原因。 */
@@ -111,7 +149,9 @@ export default {
         const paint = (data) => {
           stats.textContent = '';
           const add = (k, v) => stats.appendChild(ctx.ui.stat({ k, v: String(v) }));
-          add(t.api, data.accountOnline === true ? t.online : data.accountOnline === false ? t.offline : t.unknown);
+          add(t.api, apiStatus(data.apiOnline));
+          add(t.login, loginStatus(data.accountAuthenticated));
+          add(t.connection, connectionStatus(data.accountConnection));
           add(t.stream, data.sse ?? t.unknown);
           add(t.cursor, data.cursor ?? t.none);
           add(t.threads, data.threads ?? 0);
@@ -122,12 +162,22 @@ export default {
           const rows = [
             [t.address, data.baseUrl || t.none],
             [t.accountId, data.accountId || t.none],
+            [t.autoConnect, yesNo(data.autoConnect)],
+            [t.contactSync, syncStatus(data.contactSyncReady)],
+            [t.incomingTransport, data.incomingTransport || t.unknown],
+            [t.nativeRuntime, yesNo(data.nativeRuntime)],
+            [t.projectionBatches, data.pendingProjectionBatches ?? t.unknown],
+            [t.schemaCompatibility, data.schemaCompatibility || t.unknown],
+            [t.storageMode, data.storageMode || t.unknown],
+            [t.statusCheck, stamp(data.lastStatusCheckAt)],
             [
               t.lastEvent,
               data.lastEventAt
                 ? `${stamp(data.lastEventAt)}${data.lastEventKind ? ` · ${data.lastEventKind}` : ''}`
                 : t.none,
             ],
+            [t.errorSource, data.lastErrorSource || t.none],
+            [t.errorAt, stamp(data.lastErrorAt)],
             [t.lastError, data.lastError || t.none],
             [t.voice, voiceLine(data.voice)],
             [t.mediaRoot, data.mediaRoot || t.none],

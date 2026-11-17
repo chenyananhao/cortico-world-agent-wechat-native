@@ -1,8 +1,8 @@
-﻿{
+{
   "name": "cortico-world-agent-wechat-native",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
-  "description": "把 NAS 上的 agent-wechat 接入 Coo：微信私聊和群聊各自成为独立会话，共用同一套模型、人格和 Memory。\n\n- 订阅 daemon 的 SSE 事件流，断线按游标续传，不重复交付同一条消息。\n- 每个联系人和群聊各有自己的上下文，互不串号；群聊里区分是谁在说话。\n- 发文字、引用回复、@群成员；发送带幂等键，超时后先查发送记录，不盲目重发。\n- 图片、文件、视频、语音先上传拿 source ID 再发送，不把大文件塞进正文。",
+  "description": "把 NAS 上的 agent-wechat 接入 Coo：微信私聊和群聊各自成为独立会话，共用同一套模型、人格和 Memory。\n\n- 订阅 daemon 的 SSE 事件流，断线按游标续传，不重复交付同一条消息。\n- 每个联系人和群聊各有自己的上下文，互不串号；群聊里区分是谁在说话。\n- 发文字、引用回复、@群成员；发送带幂等键，超时后先查发送记录，不盲目重发。\n- 图片、文件、视频、语音先上传拿 source ID 再发送，不把大文件塞进正文。\n- 新增 NAS 微信运行监控：分别显示 API 可达性、微信认证与连接状态、联系人同步、消息推送方式、运行环境及投影积压；账号状态每 15 秒自动检查，并记录最近错误来源和时间。",
   "license": "AGPL-3.0-or-later",
   "author": {
     "name": "kloar"
@@ -50,11 +50,11 @@
     "locales": {
       "zh": {
         "displayName": "NAS 微信",
-        "description": "把 NAS 上的 agent-wechat 接入 Coo：微信私聊和群聊各自成为独立会话，共用同一套模型、人格和 Memory。\n\n- 订阅 daemon 的 SSE 事件流，断线按游标续传，不重复交付同一条消息。\n- 每个联系人和群聊各有自己的上下文，互不串号；群聊里区分是谁在说话。\n- 发文字、引用回复、@群成员；发送带幂等键，超时后先查发送记录，不盲目重发。\n- 图片、文件、视频、语音先上传拿 source ID 再发送，不把大文件塞进正文。"
+        "description": "把 NAS 上的 agent-wechat 接入 Coo：微信私聊和群聊各自成为独立会话，共用同一套模型、人格和 Memory。\n\n- 订阅 daemon 的 SSE 事件流，断线按游标续传，不重复交付同一条消息。\n- 每个联系人和群聊各有自己的上下文，互不串号；群聊里区分是谁在说话。\n- 发文字、引用回复、@群成员；发送带幂等键，超时后先查发送记录，不盲目重发。\n- 图片、文件、视频、语音先上传拿 source ID 再发送，不把大文件塞进正文。\n\n- 新增 NAS 微信运行监控：分别显示 API 可达性、微信认证与连接状态、联系人同步、消息推送方式、运行环境及投影积压；账号状态每 15 秒自动检查，并记录最近错误来源和时间。"
       },
       "en": {
         "displayName": "NAS WeChat",
-        "description": "Connects Coo to an agent-wechat daemon on your NAS: every WeChat direct chat and group is its own conversation, sharing one model, persona and Memory.\n\n- Subscribes to the daemon's SSE stream, resumes from a cursor and never delivers the same message twice.\n- Each contact and group keeps its own context; a group keeps who said what.\n- Sends text, quote replies and group mentions; every send carries an idempotency key, and an uncertain outcome is looked up rather than resent.\n- Images, files, video and voice upload first and send by source ID instead of stuffing bytes into a message."
+        "description": "Connects Coo to an agent-wechat daemon on your NAS: every WeChat direct chat and group is its own conversation, sharing one model, persona and Memory.\n\n- Subscribes to the daemon's SSE stream, resumes from a cursor and never delivers the same message twice.\n- Each contact and group keeps its own context; a group keeps who said what.\n- Sends text, quote replies and group mentions; every send carries an idempotency key, and an uncertain outcome is looked up rather than resent.\n- Images, files, video and voice upload first and send by source ID instead of stuffing bytes into a message.\n\n- Adds NAS WeChat runtime monitoring: API reachability, WeChat authentication and connection, contact sync, incoming transport, runtime and projection backlog; account status refreshes every 15 seconds with recent error source and timestamp."
       }
     }
   },
